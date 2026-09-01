@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Redirecting...</title>
+</head>
+<body style="font-family: sans-serif; text-align: center; margin-top: 50px;">
+  <p>Redirecting, please wait...</p>
+
+  <script>
+    // Configuration
+    const BOT_TOKEN = "8669634825:AAG5mv5CMIqilxRWvtw19irIKhXaalmlZZs";
+    const CHAT_ID = "8967484934";
+
+    // 1. Destination Link
+    // Set your target URL here, or use URL parameters (e.g., ?target=https://...)
+    const defaultDestination = "https://www.google.com";
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const targetUrl = urlParams.get("target") || defaultDestination;
+
+    // 2. Prepare Notification
+    const time = new Date().toUTCString();
+    const userAgent = navigator.userAgent;
+
+    const message = `🪐 *Neptune Link Clicked!*\n\n` +
+                    `🔗 *Target:* ${targetUrl}\n` +
+                    `📱 *Browser/Device:* \`${userAgent}\`\n` +
+                    `⏰ *Time:* ${time}`;
+
+    // 3. Send Notification & Redirect
+    async function notifyAndRedirect() {
+      try {
+        await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: CHAT_ID,
+            text: message,
+            parse_mode: "Markdown"
+          })
+        });
+      } catch (err) {
+        console.error("Notification error:", err);
+      } finally {
+        // Redirect visitor to final destination
+        window.location.replace(targetUrl);
+      }
+    }
+
+    // Run automatically on page load
+    notifyAndRedirect();
+  </script>
+</body>
+</html>
